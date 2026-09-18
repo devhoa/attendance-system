@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE "Employee" ADD COLUMN     "hourlyRate" DOUBLE PRECISION NOT NULL DEFAULT 250000;
