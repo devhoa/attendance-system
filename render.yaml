@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: attendance-server
+    runtime: node
+    rootDir: .
+    buildCommand: |
+      cd server && npm install --include=dev && npx prisma generate && npx prisma migrate deploy && npm run build
+    startCommand: |
+      cd server && npm run start
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: JWT_SECRET
+        generateValue: true
+      - key: DATABASE_URL
+        sync: false
