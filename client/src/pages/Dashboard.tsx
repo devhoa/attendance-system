@@ -1,3 +1,5 @@
+import { useState } from 'react';
+
 type DashboardProps = {
   dashboard: {
     summary: {
@@ -72,6 +74,7 @@ export default function Dashboard({ dashboard, user }: DashboardProps) {
 
   const { summary, recentRecords } = dashboard;
   const isEmployeeView = user?.role === 'EMPLOYEE';
+  const [showTotalSalary, setShowTotalSalary] = useState(false);
   const totalHours = summary.totalHours ?? recentRecords.reduce((sum, record) => sum + (record.totalHours ?? 0), 0);
   const totalBonus = summary.totalBonus ?? recentRecords.reduce((sum, record) => sum + (record.bonus ?? 0), 0);
   const totalSalary = summary.totalSalary ?? recentRecords.reduce((sum, record) => {
@@ -91,7 +94,7 @@ export default function Dashboard({ dashboard, user }: DashboardProps) {
     ? [
         { label: 'Tổng giờ làm', value: formatHours(totalHours), accent: 'bg-blue-100 text-blue-700' },
         { label: 'Tổng bonus', value: formatMoney(totalBonus), accent: 'bg-emerald-100 text-emerald-700' },
-        { label: 'Tổng lương', value: formatMoney(totalSalary), accent: 'bg-violet-100 text-violet-700' },
+        { label: 'Tổng lương', value: showTotalSalary ? formatMoney(totalSalary) : '••••••••••', accent: 'bg-violet-100 text-violet-700' },
         { label: 'Giờ làm TB', value: formatHours(averageHours), accent: 'bg-amber-100 text-amber-700' },
       ]
     : [
@@ -118,14 +121,41 @@ export default function Dashboard({ dashboard, user }: DashboardProps) {
       </div>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 md:grid-cols-4">
-        {statCards.map((stat) => (
-          <div key={stat.label} className="rounded-3xl border border-slate-200 bg-gradient-to-br from-white to-slate-50 p-3 shadow-[0_18px_38px_rgba(15,23,42,0.08)] transition hover:-translate-y-0.5 hover:shadow-[0_20px_42px_rgba(15,23,42,0.12)] sm:p-5">
-            <div className={`inline-flex rounded-xl px-2 py-1 text-[10px] font-semibold shadow-sm sm:px-2.5 sm:text-xs ${stat.accent}`}>
-              {stat.label}
+        {statCards.map((stat) => {
+          const isSalaryCard = stat.label === 'Tổng lương';
+
+          return (
+            <div key={stat.label} className="rounded-3xl border border-slate-200 bg-gradient-to-br from-white to-slate-50 p-3 shadow-[0_18px_38px_rgba(15,23,42,0.08)] transition hover:-translate-y-0.5 hover:shadow-[0_20px_42px_rgba(15,23,42,0.12)] sm:p-5">
+              <div className="flex items-center justify-between gap-2">
+                <div className={`inline-flex rounded-xl px-2 py-1 text-[10px] font-semibold shadow-sm sm:px-2.5 sm:text-xs ${stat.accent}`}>
+                  {stat.label}
+                </div>
+                {isSalaryCard && (
+                  <button
+                    type="button"
+                    aria-label={showTotalSalary ? 'Ẩn tổng lương' : 'Hiện tổng lương'}
+                    onClick={() => setShowTotalSalary((prev) => !prev)}
+                    className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 transition hover:border-sky-200 hover:text-sky-600"
+                  >
+                    {showTotalSalary ? (
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4">
+                        <path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z" />
+                        <circle cx="12" cy="12" r="3" />
+                      </svg>
+                    ) : (
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4">
+                        <path d="M3 3l18 18" />
+                        <path d="M10.58 10.58A2 2 0 0 0 13.42 13.42" />
+                        <path d="M9.88 5.08A10.94 10.94 0 0 1 12 5c6.5 0 10 7 10 7a17.12 17.12 0 0 1-4.04 5.18M6.61 6.61A16.97 16.97 0 0 0 2 12s3.5 7 10 7a11.54 11.54 0 0 0 5.16-1.39" />
+                      </svg>
+                    )}
+                  </button>
+                )}
+              </div>
+              <p className="mt-3 text-xl font-bold tracking-tight text-slate-900 sm:mt-4 sm:text-3xl">{stat.value}</p>
             </div>
-            <p className="mt-3 text-xl font-bold tracking-tight text-slate-900 sm:mt-4 sm:text-3xl">{stat.value}</p>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       <section className="grid gap-6 lg:grid-cols-2">

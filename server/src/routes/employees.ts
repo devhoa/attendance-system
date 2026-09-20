@@ -295,12 +295,17 @@ router.post('/', requireAuth, async (req, res) => {
     where: { email: normalizedEmail },
   });
 
-  if (existingEmployee) {
-    return res.status(409).json({ message: 'A employee with this email already exists.' });
-  }
-
-  const employee = await prisma.employee.create({
-    data: {
+  const employee = await prisma.employee.upsert({
+    where: { email: normalizedEmail },
+    update: {
+      fullName: String(fullName),
+      phone: phone ? String(phone) : null,
+      department: department ? String(department) : null,
+      position: position ? String(position) : null,
+      hourlyRate: Number.isFinite(Number(hourlyRate)) ? Number(hourlyRate) : 250000,
+      isActive: typeof isActive === 'boolean' ? isActive : true,
+    },
+    create: {
       fullName: String(fullName),
       email: normalizedEmail,
       phone: phone ? String(phone) : null,
@@ -311,7 +316,7 @@ router.post('/', requireAuth, async (req, res) => {
     },
   });
 
-  return res.status(201).json({ employee });
+  return res.status(existingEmployee ? 200 : 201).json({ employee });
 });
 
 router.put('/:id', requireAuth, async (req, res) => {
@@ -333,7 +338,7 @@ router.put('/:id', requireAuth, async (req, res) => {
   });
 
   if (existingEmployee && existingEmployee.id !== id) {
-    return res.status(409).json({ message: 'A employee with this email already exists.' });
+    return res.status(409).json({ message: 'An employee with this email already exists.' });
   }
 
   const employee = await prisma.employee.update({

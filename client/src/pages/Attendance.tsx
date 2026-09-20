@@ -65,6 +65,7 @@ export default function Attendance({ token, userRole }: { token: string; userRol
   const [period, setPeriod] = useState<PeriodFilter>('month');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [showTotalPayroll, setShowTotalPayroll] = useState(false);
   const [editingRecordId, setEditingRecordId] = useState<string | null>(null);
   const [editingRecordValues, setEditingRecordValues] = useState<{
     checkIn: string;
@@ -328,8 +329,29 @@ export default function Attendance({ token, userRole }: { token: string; userRol
           <p className="mt-2 text-2xl font-bold text-slate-900 sm:mt-3 sm:text-3xl">{formatMoney(totalBonus)}</p>
         </div>
         <div className="rounded-3xl border border-slate-200 bg-gradient-to-br from-white to-slate-50 p-4 shadow-[0_14px_28px_rgba(15,23,42,0.08)]">
-          <p className="text-xs text-slate-500 sm:text-sm">Tổng lương</p>
-          <p className="mt-2 text-xl font-bold text-slate-900 sm:mt-3 sm:text-3xl">{formatMoney(totalPayroll)}</p>
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-xs text-slate-500 sm:text-sm">Tổng lương</p>
+            <button
+              type="button"
+              aria-label={showTotalPayroll ? 'Ẩn tổng lương' : 'Hiện tổng lương'}
+              onClick={() => setShowTotalPayroll((prev) => !prev)}
+              className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 transition hover:border-sky-200 hover:text-sky-600"
+            >
+              {showTotalPayroll ? (
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4">
+                  <path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z" />
+                  <circle cx="12" cy="12" r="3" />
+                </svg>
+              ) : (
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4">
+                  <path d="M3 3l18 18" />
+                  <path d="M10.58 10.58A2 2 0 0 0 13.42 13.42" />
+                  <path d="M9.88 5.08A10.94 10.94 0 0 1 12 5c6.5 0 10 7 10 7a17.12 17.12 0 0 1-4.04 5.18M6.61 6.61A16.97 16.97 0 0 0 2 12s3.5 7 10 7a11.54 11.54 0 0 0 5.16-1.39" />
+                </svg>
+              )}
+            </button>
+          </div>
+          <p className="mt-2 text-xl font-bold text-slate-900 sm:mt-3 sm:text-3xl">{showTotalPayroll ? formatMoney(totalPayroll) : '••••••••••'}</p>
         </div>
         <div className="rounded-3xl border border-slate-200 bg-gradient-to-br from-white to-slate-50 p-4 shadow-[0_14px_28px_rgba(15,23,42,0.08)]">
           <p className="text-xs text-slate-500 sm:text-sm">Nhân viên</p>
