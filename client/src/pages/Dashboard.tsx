@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 
 type DashboardProps = {
   dashboard: {
@@ -75,6 +75,9 @@ export default function Dashboard({ dashboard, user }: DashboardProps) {
   const { summary, recentRecords } = dashboard;
   const isEmployeeView = user?.role === 'EMPLOYEE';
   const [showTotalSalary, setShowTotalSalary] = useState(false);
+  const [isLunarView, setIsLunarView] = useState(false);
+  const today = new Date();
+  const [currentMonth, setCurrentMonth] = useState(new Date(today.getFullYear(), today.getMonth(), 1));
   const totalHours = summary.totalHours ?? recentRecords.reduce((sum, record) => sum + (record.totalHours ?? 0), 0);
   const totalBonus = summary.totalBonus ?? recentRecords.reduce((sum, record) => sum + (record.bonus ?? 0), 0);
   const totalSalary = summary.totalSalary ?? recentRecords.reduce((sum, record) => {
@@ -103,6 +106,87 @@ export default function Dashboard({ dashboard, user }: DashboardProps) {
         { label: 'Đi muộn', value: summary.lateToday ?? 0, accent: 'bg-amber-100 text-amber-700' },
         { label: 'Giờ làm TB', value: formatHours(averageHours || Number(summary.presentToday ? (summary.presentToday / (summary.totalEmployees ?? 1)) * 8 : 0)), accent: 'bg-violet-100 text-violet-700' },
       ];
+
+  const calendarDays = useMemo(() => {
+    const monthStart = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1);
+    const monthEnd = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0);
+    const lead = (monthStart.getDay() + 6) % 7;
+    const totalCells = Math.ceil((lead + monthEnd.getDate()) / 7) * 7;
+    const cells: Array<{ date: Date; inCurrentMonth: boolean }> = [];
+
+    for (let index = 0; index < totalCells; index += 1) {
+      const date = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), index - lead + 1);
+      cells.push({
+        date,
+        inCurrentMonth: date.getMonth() === currentMonth.getMonth(),
+      });
+    }
+
+    return cells;
+  }, [currentMonth]);
+
+  const hoursByDate = useMemo(() => {
+    const map = new Map<string, number>();
+
+    recentRecords.forEach((record) => {
+      if (!record.checkIn) {
+        return;
+      }
+
+      const date = new Date(record.checkIn);
+      if (Number.isNaN(date.getTime())) {
+        return;
+      }
+
+      const key = date.toISOString().slice(0, 10);
+      const hours = record.totalHours ?? 0;
+      map.set(key, (map.get(key) ?? 0) + hours);
+    });
+
+    return map;
+  }, [recentRecords]);
+
+  const statusByDate = useMemo(() => {
+    const map = new Map<string, { status: string; hours: number }>();
+
+    recentRecords.forEach((record) => {
+      if (!record.checkIn) {
+        return;
+      }
+
+      const date = new Date(record.checkIn);
+      if (Number.isNaN(date.getTime())) {
+        return;
+      }
+
+      const key = date.toISOString().slice(0, 10);
+      const status = String(record.status ?? 'PRESENT').toUpperCase();
+      const hours = record.totalHours ?? 0;
+      const current = map.get(key);
+
+      if (!current || status === 'LATE' || status === 'ABSENT') {
+        map.set(key, { status, hours: current ? current.hours + hours : hours });
+      } else if (!current || status === 'PRESENT') {
+        map.set(key, { status: 'PRESENT', hours: current ? current.hours + hours : hours });
+      }
+    });
+
+    return map;
+  }, [recentRecords]);
+
+  const formatLunarDate = (date: Date) => {
+    try {
+      return new Intl.DateTimeFormat('zh-TW-u-ca-chinese', { day: 'numeric', month: 'numeric' }).format(date);
+    } catch {
+      return `${date.getDate()}`;
+    }
+  };
+
+  const monthLabel = new Intl.DateTimeFormat('vi-VN', { month: 'long', year: 'numeric' }).format(currentMonth);
+  const goToPreviousMonth = () => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1));
+  const goToNextMonth = () => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1));
+  const goToPreviousYear = () => setCurrentMonth(new Date(currentMonth.getFullYear() - 1, currentMonth.getMonth(), 1));
+  const goToNextYear = () => setCurrentMonth(new Date(currentMonth.getFullYear() + 1, currentMonth.getMonth(), 1));
 
   const hourlyData = buildHoursByDay(recentRecords);
   const maxHours = Math.max(1, ...hourlyData.map((item) => item.hours));
@@ -162,36 +246,129 @@ export default function Dashboard({ dashboard, user }: DashboardProps) {
         <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm shadow-slate-100">
           <div className="mb-6 flex items-center justify-between gap-3">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Chart</p>
-              <h2 className="text-xl font-bold text-slate-900">Giờ làm theo ngày</h2>
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Calendar</p>
+              <h2 className="text-xl font-bold text-slate-900">Lịch làm việc</h2>
             </div>
-            <span className="rounded-full bg-sky-50 px-2.5 py-1 text-xs font-medium text-sky-700">Live data</span>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={goToPreviousYear}
+                className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 transition hover:border-sky-200 hover:text-sky-700"
+                aria-label="Năm trước"
+              >
+                «
+              </button>
+              <button
+                type="button"
+                onClick={goToPreviousMonth}
+                className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 transition hover:border-sky-200 hover:text-sky-700"
+                aria-label="Tháng trước"
+              >
+                ‹
+              </button>
+              <span className="min-w-[130px] text-center text-sm font-semibold text-slate-700">{monthLabel}</span>
+              <button
+                type="button"
+                onClick={goToNextMonth}
+                className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 transition hover:border-sky-200 hover:text-sky-700"
+                aria-label="Tháng sau"
+              >
+                ›
+              </button>
+              <button
+                type="button"
+                onClick={goToNextYear}
+                className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 transition hover:border-sky-200 hover:text-sky-700"
+                aria-label="Năm sau"
+              >
+                »
+              </button>
+            </div>
           </div>
 
-          <div className="space-y-5">
-            <div className="flex h-44 items-end gap-3 pt-4">
-              {hourlyData.length > 0 ? (
-                hourlyData.map((item) => (
-                  <div key={`${item.day}-${item.hours}`} className="flex flex-1 flex-col items-center justify-end gap-2">
-                    <div className="flex h-full w-full items-end justify-center">
-                      <div
-                        className="w-full rounded-t-2xl bg-gradient-to-t from-sky-600 via-sky-500 to-sky-300 shadow-sm"
-                        style={{ height: `${(item.hours / maxHours) * 100}%`, minHeight: '18%' }}
-                      />
-                    </div>
-                    <span className="text-xs font-medium text-slate-500">{item.day}</span>
-                  </div>
-                ))
-              ) : (
-                <div className="flex h-44 w-full items-center justify-center rounded-xl bg-slate-50 text-sm text-slate-500">
-                  Chưa có dữ liệu giờ làm trong khoảng thời gian này.
-                </div>
-              )}
+          <div className="mb-4 flex justify-end">
+            <button
+              type="button"
+              onClick={() => setIsLunarView((prev) => !prev)}
+              className="rounded-full border border-sky-200 bg-sky-50 px-3 py-1.5 text-xs font-medium text-sky-700 transition hover:bg-sky-100"
+            >
+              {isLunarView ? 'Chuyển sang lịch dương' : 'Chuyển sang lịch âm'}
+            </button>
+          </div>
+
+          <div className="space-y-4">
+            <div className="grid grid-cols-7 gap-2 text-center text-[10px] font-semibold uppercase tracking-wide text-slate-500 sm:text-xs">
+              {['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'].map((day) => (
+                <div key={day} className="py-2">{day}</div>
+              ))}
             </div>
 
-            <div className="flex items-center justify-between border-t border-slate-200 pt-3 text-xs text-slate-500">
-              <span>Giờ làm theo từng ngày</span>
-              <span className="font-medium text-slate-700">{hourlyData.length > 0 ? `${Math.max(...hourlyData.map((item) => item.hours)).toFixed(1)}h cao nhất` : '0.0h'}</span>
+            <div className="grid grid-cols-7 gap-2">
+              {calendarDays.map(({ date, inCurrentMonth }) => {
+                const key = date.toISOString().slice(0, 10);
+                const hours = hoursByDate.get(key) ?? 0;
+                const dayStatus = statusByDate.get(key);
+                const isToday = date.toDateString() === today.toDateString();
+                const hasAttendance = hours > 0;
+                const normalizedStatus = dayStatus?.status ?? 'NONE';
+                const statusColor = normalizedStatus === 'ABSENT'
+                  ? 'border-rose-200 bg-rose-50'
+                  : normalizedStatus === 'LATE'
+                    ? 'border-amber-200 bg-amber-50'
+                    : normalizedStatus === 'PRESENT'
+                      ? 'border-emerald-200 bg-emerald-50'
+                      : 'border-slate-200 bg-slate-50';
+                const statusTextColor = normalizedStatus === 'ABSENT'
+                  ? 'text-rose-700'
+                  : normalizedStatus === 'LATE'
+                    ? 'text-amber-700'
+                    : normalizedStatus === 'PRESENT'
+                      ? 'text-emerald-700'
+                      : 'text-slate-400';
+                const tooltipLabel = normalizedStatus === 'ABSENT'
+                  ? 'Nghỉ'
+                  : normalizedStatus === 'LATE'
+                    ? 'Đi muộn'
+                    : normalizedStatus === 'PRESENT'
+                      ? 'Đúng giờ'
+                      : 'Chưa chấm công';
+                const tooltipText = `${date.getDate()}/${date.getMonth() + 1}/${date.getFullYear()}: ${hours.toFixed(1)}h - ${tooltipLabel}`;
+
+                return (
+                  <div
+                    key={key}
+                    title={tooltipText}
+                    className={[
+                      'min-h-[88px] rounded-2xl border p-2 text-left transition hover:-translate-y-0.5 hover:shadow-md',
+                      inCurrentMonth ? statusColor : 'border-slate-100 bg-slate-100 text-slate-400',
+                      isToday ? 'border-sky-500 bg-sky-100 ring-2 ring-sky-300 shadow-[0_0_0_3px_rgba(14,165,233,0.12)]' : '',
+                    ].join(' ')}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className={['text-sm font-bold', isToday ? 'text-sky-800' : inCurrentMonth ? 'text-slate-700' : 'text-slate-400'].join(' ')}>
+                        {date.getDate()}
+                      </span>
+                      {isLunarView && (
+                        <span className={['text-[10px]', hasAttendance ? statusTextColor : 'text-violet-600'].join(' ')}>{formatLunarDate(date)}</span>
+                      )}
+                    </div>
+
+                    <div className="mt-3 flex h-8 items-end justify-center">
+                      {hasAttendance ? (
+                        <span className={['rounded-full px-2 py-1 text-[10px] font-semibold', `${statusTextColor} bg-white/80`].join(' ')}>
+                          {hours.toFixed(1)}h
+                        </span>
+                      ) : (
+                        <span className="text-[10px] text-slate-300">—</span>
+                      )}
+                    </div>
+
+                    {isToday && (
+                      <div className="mt-2 h-1.5 w-full rounded-full bg-sky-500" />
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>
