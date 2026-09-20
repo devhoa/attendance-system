@@ -33,8 +33,8 @@ type DashboardSummary = {
 const STORAGE_KEY = 'attendance-token';
 
 export default function App() {
-  const [email, setEmail] = useState('admin@attendance.local');
-  const [password, setPassword] = useState('Admin@123');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [role, setRole] = useState<'EMPLOYEE'>('EMPLOYEE');
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [token, setToken] = useState<string | null>(localStorage.getItem(STORAGE_KEY));
@@ -151,7 +151,7 @@ export default function App() {
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
                 className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 outline-none transition focus:border-sky-500"
-                placeholder="admin@attendance.local"
+                placeholder="your@email.com"
               />
             </div>
 
@@ -162,7 +162,7 @@ export default function App() {
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
                 className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 outline-none transition focus:border-sky-500"
-                placeholder={mode === 'login' ? 'Admin@123' : 'At least 6 chars'}
+                placeholder={mode === 'login' ? 'Enter your password' : 'At least 6 chars'}
               />
             </div>
 
