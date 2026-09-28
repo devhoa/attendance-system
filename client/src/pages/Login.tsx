@@ -10,7 +10,7 @@ export default function Login() {
           <input
             type="email"
             className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 outline-none ring-0 transition focus:border-sky-500"
-            placeholder="admin@attendance.local"
+            placeholder="taikhoan@attendance"
           />
         </div>
 
@@ -19,7 +19,7 @@ export default function Login() {
           <input
             type="password"
             className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 outline-none transition focus:border-sky-500"
-            placeholder="Admin@123"
+            placeholder="*******"
           />
         </div>
 

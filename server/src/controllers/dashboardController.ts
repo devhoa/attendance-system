@@ -13,17 +13,20 @@ function getEndOfToday() {
   return now;
 }
 
-function getHoursFromRange(checkIn: Date, checkOut?: Date | null, totalHours?: number | null) {
-  if (typeof totalHours === 'number' && Number.isFinite(totalHours)) {
-    return totalHours;
-  }
-
-  if (!checkOut) {
+function roundToHalfHour(value: number) {
+  if (!Number.isFinite(value)) {
     return 0;
   }
 
-  const diffMs = new Date(checkOut).getTime() - new Date(checkIn).getTime();
-  return Math.max(diffMs / (1000 * 60 * 60), 0);
+  return Math.round(value * 2) / 2;
+}
+
+function getHoursFromRange(checkIn: Date, checkOut?: Date | null, totalHours?: number | null) {
+  const rawHours = typeof totalHours === 'number' && Number.isFinite(totalHours)
+    ? totalHours
+    : (!checkOut ? 0 : Math.max(new Date(checkOut).getTime() - new Date(checkIn).getTime(), 0) / (1000 * 60 * 60));
+
+  return roundToHalfHour(rawHours);
 }
 
 export async function getDashboardOverview(req: Request, res: Response) {

@@ -42,7 +42,10 @@ export default function App() {
   const [dashboard, setDashboard] = useState<DashboardSummary | null>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const [activeTab, setActiveTab] = useState<'dashboard' | 'attendance' | 'employees'>('dashboard');
+  const [jumpToAttendanceDate, setJumpToAttendanceDate] = useState<string | null>(null);
+  const [selectedCalendarDate, setSelectedCalendarDate] = useState<string | null>(null);
 
   useEffect(() => {
     const saved = localStorage.getItem(STORAGE_KEY);
@@ -157,13 +160,34 @@ export default function App() {
 
             <div>
               <label className="mb-1 block text-sm font-medium text-slate-700">Password</label>
-              <input
-                type="password"
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 outline-none transition focus:border-sky-500"
-                placeholder={mode === 'login' ? 'Enter your password' : 'At least 6 chars'}
-              />
+              <div className="relative">
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                  className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 pr-11 outline-none transition focus:border-sky-500"
+                  placeholder={mode === 'login' ? 'Enter your password' : 'At least 6 chars'}
+                />
+                <button
+                  type="button"
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  onClick={() => setShowPassword((prev) => !prev)}
+                  className="absolute inset-y-0 right-0 flex w-11 items-center justify-center text-slate-500 transition hover:text-slate-700"
+                >
+                  {showPassword ? (
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-5 w-5">
+                      <path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z" />
+                      <circle cx="12" cy="12" r="3" />
+                    </svg>
+                  ) : (
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-5 w-5">
+                      <path d="M3 3l18 18" />
+                      <path d="M10.58 10.58A2 2 0 0 0 13.42 13.42" />
+                      <path d="M9.88 5.08A10.94 10.94 0 0 1 12 5c6.5 0 10 7 10 7a17.12 17.12 0 0 1-4.04 5.18M6.61 6.61A16.97 16.97 0 0 0 2 12s3.5 7 10 7a11.54 11.54 0 0 0 5.16-1.39" />
+                    </svg>
+                  )}
+                </button>
+              </div>
             </div>
 
             {error ? <p className="text-sm text-red-600">{error}</p> : null}
@@ -233,8 +257,28 @@ export default function App() {
       </nav>
 
       <main className="mx-auto max-w-7xl px-4 py-4 sm:px-6 sm:py-10">
-        {activeTab === 'dashboard' && <Dashboard dashboard={dashboard} user={user} />}
-        {activeTab === 'attendance' && <Attendance token={token} userRole={user?.role ?? 'ADMIN'} />}
+        {activeTab === 'dashboard' && (
+          <Dashboard
+            dashboard={dashboard}
+            user={user}
+            selectedDate={selectedCalendarDate}
+            onSelectDate={(dateKey) => {
+              setSelectedCalendarDate(dateKey);
+              setJumpToAttendanceDate(dateKey);
+              setActiveTab('attendance');
+            }}
+          />
+        )}
+        {activeTab === 'attendance' && (
+          <Attendance
+            token={token}
+            userRole={user?.role ?? 'ADMIN'}
+            jumpToDate={jumpToAttendanceDate}
+            onDateHandled={() => {
+              setJumpToAttendanceDate(null);
+            }}
+          />
+        )}
         {canManageEmployees && activeTab === 'employees' && <Employees token={token} />}
       </main>
     </div>

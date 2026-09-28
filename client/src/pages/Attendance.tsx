@@ -22,17 +22,20 @@ const emptyAttendanceForm = {
   status: 'PRESENT',
 };
 
-function getHoursFromEntry(entry: AttendanceEntry) {
-  if (typeof entry.totalHours === 'number' && Number.isFinite(entry.totalHours)) {
-    return entry.totalHours;
-  }
-
-  if (!entry.checkIn || !entry.checkOut) {
+function roundToHalfHour(value: number) {
+  if (!Number.isFinite(value)) {
     return 0;
   }
 
-  const diffMs = new Date(entry.checkOut).getTime() - new Date(entry.checkIn).getTime();
-  return Math.max(diffMs / (1000 * 60 * 60), 0);
+  return Math.round(value * 2) / 2;
+}
+
+function getHoursFromEntry(entry: AttendanceEntry) {
+  const rawHours = typeof entry.totalHours === 'number' && Number.isFinite(entry.totalHours)
+    ? entry.totalHours
+    : (!entry.checkIn || !entry.checkOut ? 0 : Math.max(new Date(entry.checkOut).getTime() - new Date(entry.checkIn).getTime(), 0) / (1000 * 60 * 60));
+
+  return roundToHalfHour(rawHours);
 }
 
 function formatLocalDateTimeInput(value?: string | null) {
@@ -57,7 +60,17 @@ function formatMoney(value: number) {
   }).format(value);
 }
 
-export default function Attendance({ token, userRole }: { token: string; userRole?: string }) {
+export default function Attendance({
+  token,
+  userRole,
+  jumpToDate,
+  onDateHandled,
+}: {
+  token: string;
+  userRole?: string;
+  jumpToDate?: string | null;
+  onDateHandled?: () => void;
+}) {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [attendanceMap, setAttendanceMap] = useState<Record<string, AttendanceEntry[]>>({});
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<string | null>(null);
@@ -168,6 +181,37 @@ export default function Attendance({ token, userRole }: { token: string; userRol
   const maxHours = Math.max(1, ...hoursChartData.map((item) => item.value));
   const maxBonus = Math.max(1, ...bonusChartData.map((item) => item.value));
 
+  useEffect(() => {
+    if (!jumpToDate) {
+      return;
+    }
+
+    const targetEmployee = employees.find((employee) => {
+      const entries = attendanceMap[employee.id] ?? [];
+      return entries.some((entry) => {
+        const entryDate = entry.checkIn ? new Date(entry.checkIn).toISOString().slice(0, 10) : null;
+        return entryDate === jumpToDate;
+      });
+    });
+
+    if (targetEmployee) {
+      setSelectedEmployeeId(targetEmployee.id);
+    }
+
+    const targetRecord = targetEmployee
+      ? (attendanceMap[targetEmployee.id] ?? []).find((entry) => {
+        const entryDate = entry.checkIn ? new Date(entry.checkIn).toISOString().slice(0, 10) : null;
+        return entryDate === jumpToDate;
+      })
+      : null;
+
+    if (targetRecord) {
+      handleEditRecordStart(targetRecord);
+    }
+
+    onDateHandled?.();
+  }, [jumpToDate, employees, attendanceMap]);
+
   const handleAttendanceSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     const targetEmployeeId = selectedEmployeeId ?? employees[0]?.id;
@@ -248,7 +292,7 @@ export default function Attendance({ token, userRole }: { token: string; userRol
   };
 
   const liveTotalHours = attendanceForm.checkIn && attendanceForm.checkOut
-    ? ((new Date(attendanceForm.checkOut).getTime() - new Date(attendanceForm.checkIn).getTime()) / (1000 * 60 * 60)).toFixed(1)
+    ? roundToHalfHour((new Date(attendanceForm.checkOut).getTime() - new Date(attendanceForm.checkIn).getTime()) / (1000 * 60 * 60)).toFixed(1)
     : '';
 
   const exportCsv = () => {
@@ -358,6 +402,131 @@ export default function Attendance({ token, userRole }: { token: string; userRol
           <p className="mt-2 text-2xl font-bold text-slate-900 sm:mt-3 sm:text-3xl">{employees.length}</p>
         </div>
       </div>
+
+      {selectedEmployee && selectedRows.length > 0 ? (
+        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div className="mb-5 flex items-center justify-between gap-3">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Recent</p>
+              <h2 className="text-xl font-bold text-slate-900">Recent attendance for {selectedEmployee.fullName}</h2>
+            </div>
+            <span className="rounded-full bg-sky-50 px-2.5 py-1 text-xs font-medium text-sky-700">{selectedRows.length} records</span>
+          </div>
+          <div className="overflow-x-auto rounded-xl border border-slate-200">
+            <table className="min-w-[760px] text-left">
+              <thead className="bg-slate-50">
+                <tr>
+                  <th className="px-4 py-3 text-sm font-semibold text-slate-700">Check in</th>
+                  <th className="px-4 py-3 text-sm font-semibold text-slate-700">Check out</th>
+                  <th className="px-4 py-3 text-sm font-semibold text-slate-700">Hours</th>
+                  <th className="px-4 py-3 text-sm font-semibold text-slate-700">Bonus</th>
+                  <th className="px-4 py-3 text-sm font-semibold text-slate-700">Salary</th>
+                  <th className="px-4 py-3 text-sm font-semibold text-slate-700">Note</th>
+                  <th className="px-4 py-3 text-sm font-semibold text-slate-700">Action</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-200">
+                {selectedRows.map((entry) => {
+                  const hours = getHoursFromEntry(entry);
+                  const hourlyRate = Number(selectedEmployee.hourlyRate ?? DEFAULT_HOURLY_RATE);
+                  const salary = hours * hourlyRate + (entry.bonus ?? 0);
+                  const isEditing = editingRecordId === entry.id && editingRecordValues;
+
+                  return (
+                    <tr key={entry.id} className="bg-white align-top">
+                      {isEditing ? (
+                        <>
+                          <td className="px-3 py-3 text-sm text-slate-700">
+                            <input
+                              type="datetime-local"
+                              value={editingRecordValues.checkIn}
+                              onChange={(event) => handleEditRecordChange('checkIn', event.target.value)}
+                              className="w-full rounded-md border border-slate-300 bg-slate-50 px-2 py-1.5 outline-none focus:border-sky-500"
+                            />
+                          </td>
+                          <td className="px-3 py-3 text-sm text-slate-700">
+                            <input
+                              type="datetime-local"
+                              value={editingRecordValues.checkOut}
+                              onChange={(event) => handleEditRecordChange('checkOut', event.target.value)}
+                              className="w-full rounded-md border border-slate-300 bg-slate-50 px-2 py-1.5 outline-none focus:border-sky-500"
+                            />
+                          </td>
+                          <td className="px-3 py-3 text-sm text-slate-700">
+                            <input
+                              type="number"
+                              step="0.1"
+                              value={editingRecordValues.totalHours}
+                              onChange={(event) => handleEditRecordChange('totalHours', event.target.value)}
+                              className="w-24 rounded-md border border-slate-300 bg-slate-50 px-2 py-1.5 outline-none focus:border-sky-500"
+                            />
+                          </td>
+                          <td className="px-3 py-3 text-sm text-slate-700">
+                            <input
+                              type="number"
+                              step="1000"
+                              value={editingRecordValues.bonus}
+                              onChange={(event) => handleEditRecordChange('bonus', event.target.value)}
+                              className="w-28 rounded-md border border-slate-300 bg-slate-50 px-2 py-1.5 outline-none focus:border-sky-500"
+                            />
+                          </td>
+                          <td className="px-3 py-3 text-sm text-slate-700">{formatMoney(salary)}</td>
+                          <td className="px-3 py-3 text-sm text-slate-700">
+                            <textarea
+                              value={editingRecordValues.notes}
+                              onChange={(event) => handleEditRecordChange('notes', event.target.value)}
+                              className="min-h-[60px] w-full rounded-md border border-slate-300 bg-slate-50 px-2 py-1.5 outline-none focus:border-sky-500"
+                            />
+                          </td>
+                          <td className="px-3 py-3 text-sm">
+                            <div className="flex flex-col gap-2">
+                              <button
+                                type="button"
+                                onClick={() => void handleSaveRecord(entry)}
+                                className="rounded-lg bg-emerald-100 px-2.5 py-1.5 text-emerald-700 hover:bg-emerald-200"
+                              >
+                                Save
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setEditingRecordId(null);
+                                  setEditingRecordValues(null);
+                                }}
+                                className="rounded-lg bg-slate-200 px-2.5 py-1.5 text-slate-700 hover:bg-slate-300"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          </td>
+                        </>
+                      ) : (
+                        <>
+                          <td className="px-4 py-3 text-sm text-slate-700">{new Date(entry.checkIn).toLocaleString()}</td>
+                          <td className="px-4 py-3 text-sm text-slate-700">{entry.checkOut ? new Date(entry.checkOut).toLocaleString() : '—'}</td>
+                          <td className="px-4 py-3 text-sm text-slate-700">{hours.toFixed(1)}h</td>
+                          <td className="px-4 py-3 text-sm text-slate-700">{entry.bonus ? formatMoney(entry.bonus) : '—'}</td>
+                          <td className="px-4 py-3 text-sm text-slate-700">{formatMoney(salary)}</td>
+                          <td className="px-4 py-3 text-sm text-slate-700">{entry.notes || '—'}</td>
+                          <td className="px-4 py-3 text-sm">
+                            <button
+                              type="button"
+                              onClick={() => handleEditRecordStart(entry)}
+                              className="rounded-lg bg-amber-100 px-2.5 py-1.5 text-amber-700 hover:bg-amber-200"
+                            >
+                              Edit
+                            </button>
+                          </td>
+                        </>
+                      )}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ) : null}
 
       <div className="grid gap-6 xl:grid-cols-2">
         <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-[0_18px_34px_rgba(15,23,42,0.06)] sm:p-6">
@@ -558,124 +727,6 @@ export default function Attendance({ token, userRole }: { token: string; userRol
         </div>
       </div>
 
-      {selectedEmployee && selectedRows.length > 0 ? (
-        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-          <h2 className="text-xl font-bold text-slate-900">Recent attendance for {selectedEmployee.fullName}</h2>
-          <div className="mt-5 overflow-x-auto rounded-xl border border-slate-200">
-            <table className="min-w-[760px] text-left">
-              <thead className="bg-slate-50">
-                <tr>
-                  <th className="px-4 py-3 text-sm font-semibold text-slate-700">Check in</th>
-                  <th className="px-4 py-3 text-sm font-semibold text-slate-700">Check out</th>
-                  <th className="px-4 py-3 text-sm font-semibold text-slate-700">Hours</th>
-                  <th className="px-4 py-3 text-sm font-semibold text-slate-700">Bonus</th>
-                  <th className="px-4 py-3 text-sm font-semibold text-slate-700">Salary</th>
-                  <th className="px-4 py-3 text-sm font-semibold text-slate-700">Note</th>
-                  <th className="px-4 py-3 text-sm font-semibold text-slate-700">Action</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-200">
-                {selectedRows.map((entry) => {
-                  const hours = getHoursFromEntry(entry);
-                  const hourlyRate = Number(selectedEmployee.hourlyRate ?? DEFAULT_HOURLY_RATE);
-                  const salary = hours * hourlyRate + (entry.bonus ?? 0);
-                  const isEditing = editingRecordId === entry.id && editingRecordValues;
-
-                  return (
-                    <tr key={entry.id} className="bg-white align-top">
-                      {isEditing ? (
-                        <>
-                          <td className="px-3 py-3 text-sm text-slate-700">
-                            <input
-                              type="datetime-local"
-                              value={editingRecordValues.checkIn}
-                              onChange={(event) => handleEditRecordChange('checkIn', event.target.value)}
-                              className="w-full rounded-md border border-slate-300 bg-slate-50 px-2 py-1.5 outline-none focus:border-sky-500"
-                            />
-                          </td>
-                          <td className="px-3 py-3 text-sm text-slate-700">
-                            <input
-                              type="datetime-local"
-                              value={editingRecordValues.checkOut}
-                              onChange={(event) => handleEditRecordChange('checkOut', event.target.value)}
-                              className="w-full rounded-md border border-slate-300 bg-slate-50 px-2 py-1.5 outline-none focus:border-sky-500"
-                            />
-                          </td>
-                          <td className="px-3 py-3 text-sm text-slate-700">
-                            <input
-                              type="number"
-                              step="0.1"
-                              value={editingRecordValues.totalHours}
-                              onChange={(event) => handleEditRecordChange('totalHours', event.target.value)}
-                              className="w-24 rounded-md border border-slate-300 bg-slate-50 px-2 py-1.5 outline-none focus:border-sky-500"
-                            />
-                          </td>
-                          <td className="px-3 py-3 text-sm text-slate-700">
-                            <input
-                              type="number"
-                              step="1000"
-                              value={editingRecordValues.bonus}
-                              onChange={(event) => handleEditRecordChange('bonus', event.target.value)}
-                              className="w-28 rounded-md border border-slate-300 bg-slate-50 px-2 py-1.5 outline-none focus:border-sky-500"
-                            />
-                          </td>
-                          <td className="px-3 py-3 text-sm text-slate-700">{formatMoney(salary)}</td>
-                          <td className="px-3 py-3 text-sm text-slate-700">
-                            <textarea
-                              value={editingRecordValues.notes}
-                              onChange={(event) => handleEditRecordChange('notes', event.target.value)}
-                              className="min-h-[60px] w-full rounded-md border border-slate-300 bg-slate-50 px-2 py-1.5 outline-none focus:border-sky-500"
-                            />
-                          </td>
-                          <td className="px-3 py-3 text-sm">
-                            <div className="flex flex-col gap-2">
-                              <button
-                                type="button"
-                                onClick={() => void handleSaveRecord(entry)}
-                                className="rounded-lg bg-emerald-100 px-2.5 py-1.5 text-emerald-700 hover:bg-emerald-200"
-                              >
-                                Save
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setEditingRecordId(null);
-                                  setEditingRecordValues(null);
-                                }}
-                                className="rounded-lg bg-slate-200 px-2.5 py-1.5 text-slate-700 hover:bg-slate-300"
-                              >
-                                Cancel
-                              </button>
-                            </div>
-                          </td>
-                        </>
-                      ) : (
-                        <>
-                          <td className="px-4 py-3 text-sm text-slate-700">{new Date(entry.checkIn).toLocaleString()}</td>
-                          <td className="px-4 py-3 text-sm text-slate-700">{entry.checkOut ? new Date(entry.checkOut).toLocaleString() : '—'}</td>
-                          <td className="px-4 py-3 text-sm text-slate-700">{hours.toFixed(1)}h</td>
-                          <td className="px-4 py-3 text-sm text-slate-700">{entry.bonus ? formatMoney(entry.bonus) : '—'}</td>
-                          <td className="px-4 py-3 text-sm text-slate-700">{formatMoney(salary)}</td>
-                          <td className="px-4 py-3 text-sm text-slate-700">{entry.notes || '—'}</td>
-                          <td className="px-4 py-3 text-sm">
-                            <button
-                              type="button"
-                              onClick={() => handleEditRecordStart(entry)}
-                              className="rounded-lg bg-amber-100 px-2.5 py-1.5 text-amber-700 hover:bg-amber-200"
-                            >
-                              Edit
-                            </button>
-                          </td>
-                        </>
-                      )}
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      ) : null}
     </div>
   );
 }

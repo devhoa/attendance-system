@@ -147,6 +147,14 @@ router.get('/:id/attendance', requireAuth, async (req, res) => {
   return res.json({ attendance: employee.attendance });
 });
 
+function roundToHalfHour(value: number) {
+  if (!Number.isFinite(value)) {
+    return 0;
+  }
+
+  return Math.round(value * 2) / 2;
+}
+
 router.post('/:id/attendance', requireAuth, async (req, res) => {
   const id = String(req.params.id);
   const { checkIn, checkOut, totalHours, bonus, notes, status } = req.body ?? {};
@@ -178,11 +186,15 @@ router.post('/:id/attendance', requireAuth, async (req, res) => {
     return res.status(400).json({ message: 'Invalid check-out time.' });
   }
 
-  const finalTotalHours = typeof totalHours === 'number' || typeof totalHours === 'string'
+  const calculatedHours = typeof totalHours === 'number' || typeof totalHours === 'string'
     ? Number(totalHours)
     : parsedCheckOut
       ? (parsedCheckOut.getTime() - parsedCheckIn.getTime()) / (1000 * 60 * 60)
       : null;
+
+  const finalTotalHours = typeof calculatedHours === 'number' && Number.isFinite(calculatedHours)
+    ? roundToHalfHour(calculatedHours)
+    : null;
 
   const normalizedStatus = typeof status === 'string' ? status.toUpperCase() : 'PRESENT';
 
@@ -233,11 +245,15 @@ router.put('/:id/attendance/:recordId', requireAuth, async (req, res) => {
     return res.status(400).json({ message: 'Invalid check-out time.' });
   }
 
-  const finalTotalHours = typeof totalHours === 'number' || typeof totalHours === 'string'
+  const calculatedHours = typeof totalHours === 'number' || typeof totalHours === 'string'
     ? Number(totalHours)
     : parsedCheckOut
       ? (parsedCheckOut.getTime() - parsedCheckIn.getTime()) / (1000 * 60 * 60)
       : existingRecord.totalHours ?? null;
+
+  const finalTotalHours = typeof calculatedHours === 'number' && Number.isFinite(calculatedHours)
+    ? roundToHalfHour(calculatedHours)
+    : null;
 
   const normalizedStatus = typeof status === 'string' ? status.toUpperCase() : existingRecord.status;
 

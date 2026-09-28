@@ -26,6 +26,8 @@ type DashboardProps = {
     }>;
   } | null;
   user?: { email: string; role: string } | null;
+  onSelectDate?: (dateKey: string) => void;
+  selectedDate?: string | null;
 };
 
 function formatHours(hours: number) {
@@ -40,6 +42,14 @@ function formatMoney(value: number) {
   }).format(value);
 }
 
+function roundToHalfHour(value: number) {
+  if (!Number.isFinite(value)) {
+    return 0;
+  }
+
+  return Math.round(value * 2) / 2;
+}
+
 function buildHoursByDay(records: Array<{ checkIn: string; checkOut?: string | null; totalHours?: number | null }>) {
   const byDay = new Map<string, { day: string; hours: number }>();
 
@@ -48,9 +58,9 @@ function buildHoursByDay(records: Array<{ checkIn: string; checkOut?: string | n
     if (Number.isNaN(checkIn.getTime())) return;
 
     const dateKey = checkIn.toISOString().slice(0, 10);
-    const hours = record.totalHours ?? ((record.checkOut)
+    const hours = roundToHalfHour(record.totalHours ?? ((record.checkOut)
       ? Math.max((new Date(record.checkOut).getTime() - checkIn.getTime()) / (1000 * 60 * 60), 0)
-      : 0);
+      : 0));
     const existing = byDay.get(dateKey) ?? { day: new Intl.DateTimeFormat('en-US', { weekday: 'short' }).format(checkIn), hours: 0 };
 
     existing.hours += hours;
@@ -63,7 +73,7 @@ function buildHoursByDay(records: Array<{ checkIn: string; checkOut?: string | n
   })).slice(-7);
 }
 
-export default function Dashboard({ dashboard, user }: DashboardProps) {
+export default function Dashboard({ dashboard, user, onSelectDate, selectedDate }: DashboardProps) {
   if (!dashboard) {
     return (
       <div className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
@@ -78,17 +88,17 @@ export default function Dashboard({ dashboard, user }: DashboardProps) {
   const [isLunarView, setIsLunarView] = useState(false);
   const today = new Date();
   const [currentMonth, setCurrentMonth] = useState(new Date(today.getFullYear(), today.getMonth(), 1));
-  const totalHours = summary.totalHours ?? recentRecords.reduce((sum, record) => sum + (record.totalHours ?? 0), 0);
+  const totalHours = summary.totalHours ?? recentRecords.reduce((sum, record) => sum + roundToHalfHour(record.totalHours ?? 0), 0);
   const totalBonus = summary.totalBonus ?? recentRecords.reduce((sum, record) => sum + (record.bonus ?? 0), 0);
   const totalSalary = summary.totalSalary ?? recentRecords.reduce((sum, record) => {
-    const hours = record.totalHours ?? ((record.checkOut && record.checkIn)
+    const hours = roundToHalfHour(record.totalHours ?? ((record.checkOut && record.checkIn)
       ? Math.max((new Date(record.checkOut).getTime() - new Date(record.checkIn).getTime()) / (1000 * 60 * 60), 0)
-      : 0);
+      : 0));
     return sum + hours * 250000 + (record.bonus ?? 0);
   }, 0);
 
   const averageHours = recentRecords.length
-    ? recentRecords.reduce((total, record) => total + (record.totalHours ?? ((record.checkOut && record.checkIn)
+    ? recentRecords.reduce((total, record) => total + roundToHalfHour(record.totalHours ?? ((record.checkOut && record.checkIn)
       ? Math.max((new Date(record.checkOut).getTime() - new Date(record.checkIn).getTime()) / (1000 * 60 * 60), 0)
       : 0)), 0) / recentRecords.length
     : 0;
@@ -139,7 +149,7 @@ export default function Dashboard({ dashboard, user }: DashboardProps) {
       }
 
       const key = date.toISOString().slice(0, 10);
-      const hours = record.totalHours ?? 0;
+      const hours = roundToHalfHour(record.totalHours ?? 0);
       map.set(key, (map.get(key) ?? 0) + hours);
     });
 
@@ -161,7 +171,7 @@ export default function Dashboard({ dashboard, user }: DashboardProps) {
 
       const key = date.toISOString().slice(0, 10);
       const status = String(record.status ?? 'PRESENT').toUpperCase();
-      const hours = record.totalHours ?? 0;
+      const hours = roundToHalfHour(record.totalHours ?? 0);
       const current = map.get(key);
 
       if (!current || status === 'LATE' || status === 'ABSENT') {
@@ -309,6 +319,7 @@ export default function Dashboard({ dashboard, user }: DashboardProps) {
                 const hours = hoursByDate.get(key) ?? 0;
                 const dayStatus = statusByDate.get(key);
                 const isToday = date.toDateString() === today.toDateString();
+                const isSelected = selectedDate === key;
                 const hasAttendance = hours > 0;
                 const normalizedStatus = dayStatus?.status ?? 'NONE';
                 const statusColor = normalizedStatus === 'ABSENT'
@@ -338,10 +349,16 @@ export default function Dashboard({ dashboard, user }: DashboardProps) {
                   <div
                     key={key}
                     title={tooltipText}
+                    onClick={() => {
+                      if (onSelectDate) {
+                        onSelectDate(key);
+                      }
+                    }}
                     className={[
-                      'min-h-[88px] rounded-2xl border p-2 text-left transition hover:-translate-y-0.5 hover:shadow-md',
+                      'min-h-[88px] cursor-pointer rounded-2xl border p-2 text-left transition hover:-translate-y-0.5 hover:shadow-md',
                       inCurrentMonth ? statusColor : 'border-slate-100 bg-slate-100 text-slate-400',
-                      isToday ? 'border-sky-500 bg-sky-100 ring-2 ring-sky-300 shadow-[0_0_0_3px_rgba(14,165,233,0.12)]' : '',
+                      isSelected ? 'border-violet-500 bg-violet-100 ring-2 ring-violet-300 shadow-[0_0_0_3px_rgba(167,139,250,0.18)]' : '',
+                      isToday && !isSelected ? 'border-sky-500 bg-sky-100 ring-2 ring-sky-300 shadow-[0_0_0_3px_rgba(14,165,233,0.12)]' : '',
                     ].join(' ')}
                   >
                     <div className="flex items-center justify-between gap-2">

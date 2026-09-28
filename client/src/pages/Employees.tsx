@@ -33,6 +33,14 @@ const emptyAttendanceForm = {
   status: 'PRESENT',
 };
 
+function roundToHalfHour(value: number) {
+  if (!Number.isFinite(value)) {
+    return 0;
+  }
+
+  return Math.round(value * 2) / 2;
+}
+
 function formatMoney(value: number) {
   return new Intl.NumberFormat('vi-VN', {
     style: 'currency',
@@ -234,7 +242,7 @@ export default function Employees({ token }: { token: string }) {
   };
 
   const totalHoursFromTimes = attendanceForm.checkIn && attendanceForm.checkOut
-    ? ((new Date(attendanceForm.checkOut).getTime() - new Date(attendanceForm.checkIn).getTime()) / (1000 * 60 * 60)).toFixed(1)
+    ? roundToHalfHour((new Date(attendanceForm.checkOut).getTime() - new Date(attendanceForm.checkIn).getTime()) / (1000 * 60 * 60)).toFixed(1)
     : '';
 
   return (
